@@ -19,6 +19,7 @@ scrollbar = True
 
 #Global variables
 main_frame = None
+files_read_frame = None
 all_dfs_dict = None
 columns_to_dropdown_element = {}
 
@@ -113,7 +114,7 @@ def selected_actions_are_valid(columns_to_action):
             #For DOB formatting, column must be a date
             elif action == 'DOB formatting':
                 if(not app_backend.column_has_dates(df_dict['dataset'], column)):
-                    messagebox.showinfo("Error", f'Column {column} in {df_dict.dataset_path} has rows without dates.\nDOB formatting is only available for dates.')
+                    messagebox.showinfo("Error", f"Column {column} in {df_dict['dataset_path']} has rows without dates.\nDOB formatting is only available for dates.")
                     return False
     return True
 
@@ -128,12 +129,6 @@ def create_deidentified_datasets(select_columns_frame):
 
     #We need to check that selected actions are valid
     if(not selected_actions_are_valid(columns_to_action)):
-        return
-
-    #We need to check that all selected dfs have same structure
-    all_columns_same_names, error_message = app_backend.all_dfs_have_same_columns(all_dfs_dict)
-    if(not all_columns_same_names):
-        messagebox.showinfo("Error", error_message)
         return
 
     display_message("Creating deidentified dataset(s)...", select_columns_frame)
@@ -152,7 +147,19 @@ def create_deidentified_datasets(select_columns_frame):
 
 
 
-def create_select_columns_frame(columns_names, labels_dict):
+def create_select_columns_frame(first_view_frame):
+
+    #We need to check that all selected dfs have same structure
+    all_columns_same_names, error_message = app_backend.all_dfs_have_same_columns(all_dfs_dict)
+    if(not all_columns_same_names):
+      messagebox.showinfo("Error", error_message)
+      return
+
+    #Remove current frame
+    first_view_frame.pack_forget()
+
+    #Get columns
+    columns_names, labels_dict = app_backend.get_df_columns_names_and_labels(all_dfs_dict[0])
 
     select_columns_frame = tk.Frame(master=main_frame, bg="white")
     select_columns_frame.pack(anchor='nw', padx=(0, 0), pady=(0, 0))
@@ -173,9 +180,29 @@ def create_select_columns_frame(columns_names, labels_dict):
 
     return select_columns_frame
 
+def update_files_read_frame(first_view_frame):
+    global files_read_frame
+
+    #Clean previous files read
+    if(files_read_frame is not None):
+        files_read_frame.pack_forget()
+
+    #Display files read
+    if(len(all_dfs_dict))>0:
+        files_read_frame = tk.Frame(master=first_view_frame, bg="white")
+        files_read_frame.pack(anchor='nw', padx=(0, 0), pady=(0, 0))
+
+        display_message("Success reading following file(s):", files_read_frame)
+        for df_dict in all_dfs_dict:
+            display_message(df_dict['dataset_path'], files_read_frame)
+
+        #Add buttom to start deidentification
+        deidentify_button = ttk.Button(files_read_frame, text="Start deidentification",
+        command=lambda : create_select_columns_frame(first_view_frame), style='my.TButton')
+        deidentify_button.pack(anchor='nw', padx=(30, 30), pady=(0, 5))
 
 
-def import_files_and_start_process(first_view_frame):
+def import_files(first_view_frame):
 
     global all_dfs_dict
 
@@ -188,6 +215,8 @@ def import_files_and_start_process(first_view_frame):
     import_file_message = display_message("Importing File(s)...", first_view_frame)
 
     imports_result = app_backend.import_datasets(datasets_path)
+    import_file_message.pack_forget()
+
     all_dfs_dict = []
 
     #Check imports of different files result
@@ -195,19 +224,12 @@ def import_files_and_start_process(first_view_frame):
         import_succesfull, import_content = import_result
 
         if not import_succesfull:
-            display_message("Error when importing dataset. Try again", first_view_frame)
-            display_message(import_content, first_view_frame)
-            return
+            messagebox.showinfo("Error when importing dataset", import_content)
         else:
             all_dfs_dict.append(import_content)
 
-    #Now lets move to the next step based on the analysis of the first file
-    #Start processing df
-    columns_names, labels_dict = app_backend.get_df_columns_names_and_labels(all_dfs_dict[0])
+    update_files_read_frame(first_view_frame)
 
-    #Remove current frame and create new one
-    first_view_frame.pack_forget()
-    select_columns_frame = create_select_columns_frame(columns_names, labels_dict)
 
 def window_setup(master):
 
@@ -254,7 +276,7 @@ def create_first_view_frame():
     start_application_label.pack(anchor='nw', padx=(30, 30), pady=(0, 10))
 
     select_dataset_button = ttk.Button(first_view_frame, text="Select Dataset(s)",
-    command=lambda : import_files_and_start_process(first_view_frame), style='my.TButton')
+    command=lambda : import_files(first_view_frame), style='my.TButton')
     select_dataset_button.pack(anchor='nw', padx=(30, 30), pady=(0, 5))
 
     return first_view_frame

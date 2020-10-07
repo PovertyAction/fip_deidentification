@@ -262,17 +262,17 @@ def import_dataset(dataset_path):
             except AttributeError:
                 status_message = "No value labels detected. "
         elif dataset_path.endswith('vc'):
-            status_message = "**ERROR**: This folder appears to be encrypted using VeraCrypt."
+            status_message = f'**ERROR**: {dataset_path} appears to be encrypted using VeraCrypt.'
             raise Exception
         elif dataset_path.endswith('bc'):
-            status_message = "**ERROR**: This file appears to be encrypted using Boxcryptor. Sign in to Boxcryptor and then select the file in your X: drive."
+            status_message = f'**ERROR**: This file {dataset_path} appears to be encrypted using Boxcryptor. Sign in to Boxcryptor and then select the file in your X: drive.'
             raise Exception
         else:
             raise Exception
 
     except (FileNotFoundError, Exception):
         if status_message is False:
-            status_message = '**ERROR**: This path appears to be invalid.'
+            status_message = f'**ERROR**: {dataset_path} appears to be invalid.'
         raise
 
     if (status_message):
