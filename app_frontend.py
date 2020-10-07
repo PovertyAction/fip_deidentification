@@ -85,14 +85,14 @@ def display_columns(frame, columns, label_dict, default_dropdown_option="Keep"):
 
     return columns_frame
 
-def create_goodbye_frame():
+def create_goodbye_frame(outputs_folder):
 
     goodbye_frame = tk.Frame(master=main_frame, bg="white")
     goodbye_frame.pack(anchor='nw', padx=(0, 0), pady=(0, 0))
 
 
     display_title("Congratulations! Task ready!", goodbye_frame)
-    display_message("The new dataset(s) has been created and saved in a folder named 'output'\nIf you hashed variables, you will also find hash_dictionary.csv that maps original to hashed values.\nYou will also find a log file describing the detection process.", goodbye_frame)
+    display_message(f"The new deidentified datasets have been created.\nYou can find all outputs in {outputs_folder}\nIf you hashed variables, you will find hash_dictionary.csv that maps original to hashed values.\nYou will also find a log file describing the deidentification process.", goodbye_frame)
 
 #PENDING: ADD A BUTTOM TO FOLDER WITH OUTPUTS
 
@@ -137,13 +137,13 @@ def create_deidentified_datasets(select_columns_frame):
     canvas.yview_moveto( 1 )
     main_frame.update()
 
-    result = app_backend.create_deidentified_datasets(all_dfs_dict, columns_to_action)
+    outputs_path = app_backend.create_deidentified_datasets(all_dfs_dict, columns_to_action)
 
     #Remove current frame
     select_columns_frame.pack_forget()
 
     #Create final frame
-    create_goodbye_frame()
+    create_goodbye_frame(outputs_path)
 
 
 

@@ -173,6 +173,8 @@ def create_deidentified_datasets(all_dfs_dict, columns_to_action):
     #Export new dictionary
     export_hash_dict(hash_dictionary)
 
+    return OUTPUTS_PATH
+
 
 def create_deidentified_dataset(df, df_path, columns_to_action, hash_dictionary):
     ## a. Drops unneeded columns
