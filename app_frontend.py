@@ -117,6 +117,8 @@ def selected_actions_are_valid(columns_to_action):
                     return False
     return True
 
+
+
 def create_deidentified_datasets(select_columns_frame):
 
     #We create a new dictionary that maps columns to actions based on value of dropdown elements
@@ -129,7 +131,10 @@ def create_deidentified_datasets(select_columns_frame):
         return
 
     #We need to check that all selected dfs have same structure
-    #PENDING
+    all_columns_same_names, error_message = app_backend.all_dfs_have_same_columns(all_dfs_dict)
+    if(not all_columns_same_names):
+        messagebox.showinfo("Error", error_message)
+        return
 
     display_message("Creating deidentified dataset(s)...", select_columns_frame)
 

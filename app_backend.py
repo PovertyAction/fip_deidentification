@@ -148,6 +148,20 @@ def export_df(dataset, dataset_path):
 
     return new_file_path
 
+def all_dfs_have_same_columns(all_dfs_dict):
+    #Columns of first df
+    columns_first_df = all_dfs_dict[0]['dataset'].columns
+
+    for index, df_dict in enumerate(all_dfs_dict):
+        if index > 0: #We dont want to look at the first one
+            #Check that all columns that are in the first df are in this df
+            for c in columns_first_df:
+                if c not in df_dict['dataset'].columns:
+                    return False, f"Column {c}, found in {all_dfs_dict[0]['dataset_path']} is missing in {df_dict['dataset_path']}. Dataframes processed at the same time must have same columns"
+    return True, "Success"
+
+
+
 def create_deidentified_datasets(all_dfs_dict, columns_to_action):
 
     #Keep record of hashing
