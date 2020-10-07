@@ -8,7 +8,7 @@ import os
 
 import app_backend
 
-app_title = "FIP Deidentification-Hashing App - v0.1"
+app_title = "FIP Deidentification-Hashing App - v0.2"
 intro_text = "- Hashing is designed for columns containing numbers (ex: msisdn)\n- DOB formatting is designed for columns with dates\n- You can choose either one or multiple files for deidentification.\nIf you choose multiple, all files are expected to have the same format (columns)."
 
 #Set parameters
@@ -21,6 +21,7 @@ scrollbar = True
 main_frame = None
 files_read_frame = None
 all_dfs_dict = None
+password = None
 columns_to_dropdown_element = {}
 
 def display_title(title, frame):
@@ -137,7 +138,7 @@ def create_deidentified_datasets(select_columns_frame):
     canvas.yview_moveto( 1 )
     main_frame.update()
 
-    outputs_path = app_backend.create_deidentified_datasets(all_dfs_dict, columns_to_action)
+    outputs_path = app_backend.create_deidentified_datasets(all_dfs_dict, columns_to_action, password)
 
     #Remove current frame
     select_columns_frame.pack_forget()
@@ -262,6 +263,48 @@ def window_style_setup(root):
     root.style.configure('my.TCheckbutton', background='white')
     root.style.configure('my.TMenubutton', background='white')
 
+def check_password(password_inserted, first_view_frame, password_frame):
+    global password
+
+    password_is_correct = app_backend.check_password(password_inserted)
+
+    if password_is_correct:
+        messagebox.showinfo("Success", f"Welcome, you are logged in")
+        password = password_inserted
+
+        #Remove password frame
+        password_frame.pack_forget()
+
+        #Labels and buttoms to run app
+        start_application_label = ttk.Label(first_view_frame, text="Run application: ", wraplength=546, justify=tk.LEFT, font=("Calibri", 12, 'bold'), style='my.TLabel')
+        start_application_label.pack(anchor='nw', padx=(30, 30), pady=(0, 10))
+
+        select_dataset_button = ttk.Button(first_view_frame, text="Select Dataset(s)",
+        command=lambda : import_files(first_view_frame), style='my.TButton')
+        select_dataset_button.pack(anchor='nw', padx=(30, 30), pady=(0, 5))
+
+    else:
+        messagebox.showinfo("Error", f"Wrong password, please try again")
+        return False
+
+
+def create_password_frame(first_view_frame):
+
+    password_frame = tk.Frame(master=first_view_frame, bg="white")
+    password_frame.pack(anchor='nw', padx=(0, 0), pady=(0, 0))
+
+    password_label = ttk.Label(password_frame, text="Password to run app: ", wraplength=546, justify=tk.LEFT, font=("Calibri", 12, 'bold'), style='my.TLabel')
+    password_label.pack(anchor='nw', padx=(30, 30), pady=(0, 10))
+
+    password_entry = tk.Entry(password_frame)
+    password_entry.pack(anchor='nw', padx=(30, 30), pady=(0, 10))
+
+    check_password_button = ttk.Button(password_frame, text="Log in",
+    command=lambda : check_password(password_entry.get(), first_view_frame, password_frame), style='my.TButton')
+    check_password_button.pack(anchor='nw', padx=(30, 30), pady=(0, 5))
+
+    return password_frame
+
 def create_first_view_frame():
 
     first_view_frame = tk.Frame(master=main_frame, bg="white")
@@ -271,13 +314,8 @@ def create_first_view_frame():
     intro_text_label = ttk.Label(first_view_frame, text=intro_text, wraplength=746, justify=tk.LEFT, font=("Calibri", 11), style='my.TLabel')
     intro_text_label.pack(anchor='nw', padx=(30, 30), pady=(0, 12))
 
-    #Labels and buttoms to run app
-    start_application_label = ttk.Label(first_view_frame, text="Run application: ", wraplength=546, justify=tk.LEFT, font=("Calibri", 12, 'bold'), style='my.TLabel')
-    start_application_label.pack(anchor='nw', padx=(30, 30), pady=(0, 10))
-
-    select_dataset_button = ttk.Button(first_view_frame, text="Select Dataset(s)",
-    command=lambda : import_files(first_view_frame), style='my.TButton')
-    select_dataset_button.pack(anchor='nw', padx=(30, 30), pady=(0, 5))
+    #Labels and buttoms to check password
+    password_frame = create_password_frame(first_view_frame)
 
     return first_view_frame
 

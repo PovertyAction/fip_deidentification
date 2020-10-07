@@ -1,6 +1,6 @@
 import pandas as pd
 import os
-from hashlib import sha256
+from hashlib import sha256, sha224
 from datetime import datetime
 
 LOG_FILE = None
@@ -50,17 +50,16 @@ def column_has_dates(df, col):
     except:
         return False
 
-def generate_salt(value):
-    #PENDING
-    return 'xxxx'
+def generate_salt(value, password):
+    #The salt comes from hashing the value and the user password together
+    return sha224((str(password)+str(value)+str(password)).encode('utf-8')).hexdigest()
 
-def generate_hash_value(value):
-    salt = generate_salt(value)
+def generate_hash_value(value, password):
+    salt = generate_salt(value, password)
     hash_value = sha256((str(value)+salt).encode('utf-8')).hexdigest()
     return hash_value
 
-def hash_dataframe_and_create_prefix_column(df, df_path, columns_to_hash, hash_dictionary):
-
+def hash_dataframe_and_create_prefix_column(df, df_path, columns_to_hash, hash_dictionary, password):
 
     #We are expecting to hash only numeric columns
     for col in columns_to_hash:
@@ -82,7 +81,7 @@ def hash_dataframe_and_create_prefix_column(df, df_path, columns_to_hash, hash_d
         #Get all unique values and add them and their hash to hash_dict if they dont already exist
         for unique_val in df[col].unique():
             if unique_val not in hash_dictionary:
-                hash_dictionary[unique_val] = generate_hash_value(unique_val)
+                hash_dictionary[unique_val] = generate_hash_value(unique_val, password)
 
         # Replace values for their hashes in dataframe
         # Loop over available values in the dictionary
@@ -160,15 +159,24 @@ def all_dfs_have_same_columns(all_dfs_dict):
                     return False, f"Column {c}, found in {all_dfs_dict[0]['dataset_path']} is missing in {df_dict['dataset_path']}. Dataframes processed at the same time must have same columns"
     return True, "Success"
 
+def check_password(password):
+    #Hash the password and compare it with save true password hash
+    pass_hash = sha256((str(password)).encode('utf-8')).hexdigest()
+    from password import get_password_hash
+    if pass_hash == get_password_hash():
+        return True
+    else:
+        return False
 
 
-def create_deidentified_datasets(all_dfs_dict, columns_to_action):
+
+def create_deidentified_datasets(all_dfs_dict, columns_to_action, password):
 
     #Keep record of hashing
     hash_dictionary = open_hash_dictionary()
 
     for df_dict in all_dfs_dict:
-        exported_file_path, hash_dictionary = create_deidentified_dataset(df_dict['dataset'], df_dict['dataset_path'], columns_to_action, hash_dictionary)
+        exported_file_path, hash_dictionary = create_deidentified_dataset(df_dict['dataset'], df_dict['dataset_path'], columns_to_action, hash_dictionary, password)
 
     #Export new dictionary
     export_hash_dict(hash_dictionary)
@@ -176,7 +184,7 @@ def create_deidentified_datasets(all_dfs_dict, columns_to_action):
     return OUTPUTS_PATH
 
 
-def create_deidentified_dataset(df, df_path, columns_to_action, hash_dictionary):
+def create_deidentified_dataset(df, df_path, columns_to_action, hash_dictionary, password):
     ## a. Drops unneeded columns
     ## b. Hash columns so records can be matched across datasets, but holds on to number prefix to identify initial mobile carrier later
     ## c. Coverts date of birth to year of birth
@@ -190,7 +198,7 @@ def create_deidentified_dataset(df, df_path, columns_to_action, hash_dictionary)
     #Hash columns and keep prefixes
     columns_to_hash = [column for column in columns_to_action if columns_to_action[column]=='Hash']
     if(len(columns_to_hash)>0):
-        df, hash_dictionary = hash_dataframe_and_create_prefix_column(df, df_path, columns_to_hash, hash_dictionary)
+        df, hash_dictionary = hash_dataframe_and_create_prefix_column(df, df_path, columns_to_hash, hash_dictionary, password)
         log_and_print(f'Hashed columns: {" ".join(columns_to_hash)} in {df_path}')
 
     #DOB formatting
