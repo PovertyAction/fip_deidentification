@@ -2,14 +2,14 @@
 import sys
 import tkinter as tk
 from tkinter import ttk, messagebox
-from tkinter.filedialog import askopenfilename, asksaveasfile
+from tkinter.filedialog import asksaveasfile, askopenfilenames
 from PIL import ImageTk, Image
 import os
 
 import app_backend
 
 app_title = "FIP Deidentification-Hashing App - v0.1"
-intro_text = "- Hashing is designed for columns containing numbers (ex: msisdn)\n- DOB formatting is designed for columns with dates"
+intro_text = "- Hashing is designed for columns containing numbers (ex: msisdn)\n- DOB formatting is designed for columns with dates\n- You can choose either one or multiple files for deidentification.\nIf you choose multiple, all files are expected to have the same format (columns)."
 
 #Set parameters
 window_width = 700
@@ -19,8 +19,7 @@ scrollbar = True
 
 #Global variables
 main_frame = None
-file_imported = False
-df_dict = None
+all_dfs_dict = None
 columns_to_dropdown_element = {}
 
 def display_title(title, frame):
@@ -85,14 +84,14 @@ def display_columns(frame, columns, label_dict, default_dropdown_option="Keep"):
 
     return columns_frame
 
-def create_goodbye_frame(new_file_path):
+def create_goodbye_frame():
 
     goodbye_frame = tk.Frame(master=main_frame, bg="white")
     goodbye_frame.pack(anchor='nw', padx=(0, 0), pady=(0, 0))
 
-    if(new_file_path):
-        display_title("Congratulations! Task ready!", goodbye_frame)
-        display_message("The new dataset has been created and saved in "+new_file_path+".\nIf you hashed variables, you will also find hash_dictionary.csv that maps original to hashed values.\nYou will also find a log file describing the detection process.", goodbye_frame)
+
+    display_title("Congratulations! Task ready!", goodbye_frame)
+    display_message("The new dataset(s) has been created and saved in a folder named 'output'\nIf you hashed variables, you will also find hash_dictionary.csv that maps original to hashed values.\nYou will also find a log file describing the detection process.", goodbye_frame)
 
 #PENDING: ADD A BUTTOM TO FOLDER WITH OUTPUTS
 
@@ -101,7 +100,24 @@ def create_goodbye_frame(new_file_path):
         # ttk.Button(goodbye_frame, text="Restart program", command=restart_program, style='my.TButton').pack(anchor='nw', padx=(30, 30), pady=(0, 5))
 
 
-def create_deidentified_dataset(select_columns_frame):
+def selected_actions_are_valid(columns_to_action):
+    for df_dict in all_dfs_dict:
+        for column, action in columns_to_action.items():
+            #Hash is only enabled for columns with numbers, check that
+            if action == 'Hash':
+                print(df_dict['dataset_path'])
+                if(not app_backend.column_has_numbers(df_dict['dataset'], column)):
+                    print(df_dict.keys())
+                    messagebox.showinfo("Error", f"Column {column} in {df_dict['dataset_path']} has rows without numbers.\nHashing is only available for numbers.")
+                    return False
+            #For DOB formatting, column must be a date
+            elif action == 'DOB formatting':
+                if(not app_backend.column_has_dates(df_dict['dataset'], column)):
+                    messagebox.showinfo("Error", f'Column {column} in {df_dict.dataset_path} has rows without dates.\nDOB formatting is only available for dates.')
+                    return False
+    return True
+
+def create_deidentified_datasets(select_columns_frame):
 
     #We create a new dictionary that maps columns to actions based on value of dropdown elements
     columns_to_action = {}
@@ -109,38 +125,25 @@ def create_deidentified_dataset(select_columns_frame):
         columns_to_action[column] = dropdown_elem.get()
 
     #We need to check that selected actions are valid
-    for column, action in columns_to_action.items():
+    if(not selected_actions_are_valid(columns_to_action)):
+        return
 
-        #Hash is only enabled for columns with numbers, check that
-        if action == 'Hash':
-            if(not app_backend.column_has_numbers(df_dict['dataset'], column)):
-                messagebox.showinfo("Error", f'Column {column} has rows without numbers.\nHashing is only available for numbers.')
-                return
+    #We need to check that all selected dfs have same structure
+    #PENDING
 
-        #For DOB formatting, column must be a date
-        elif action == 'DOB formatting':
-            if(not app_backend.column_has_dates(df_dict['dataset'], column)):
-                messagebox.showinfo("Error", f'Column {column} has rows without dates.\nDOB formatting is only available for dates.')
-                return
-
-
-    display_message("Creating deidentified dataset...", select_columns_frame)
+    display_message("Creating deidentified dataset(s)...", select_columns_frame)
 
     #Automatic scroll down
     canvas.yview_moveto( 1 )
     main_frame.update()
 
-    # global new_file_path
+    result = app_backend.create_deidentified_datasets(all_dfs_dict, columns_to_action)
 
-
-
-    new_file_path = app_backend.create_deidentified_dataset(df_dict['dataset'], df_dict['dataset_path'], columns_to_action)
-
-    #Remove display of piis
+    #Remove current frame
     select_columns_frame.pack_forget()
 
     #Create final frame
-    create_goodbye_frame(new_file_path)
+    create_goodbye_frame()
 
 
 
@@ -158,49 +161,48 @@ def create_select_columns_frame(columns_names, labels_dict):
         display_columns(select_columns_frame, columns_names, labels_dict)
 
 
-        create_deidentified_df_button = ttk.Button(select_columns_frame, text='Create deidentified dataset', command=lambda: create_deidentified_dataset(select_columns_frame), style='my.TButton')
+        create_deidentified_df_button = ttk.Button(select_columns_frame, text='Create deidentified dataset(s)', command=lambda: create_deidentified_datasets(select_columns_frame), style='my.TButton')
 
         create_deidentified_df_button.pack(anchor='nw', padx=(30, 30), pady=(0, 5))
         # frame.update()
 
     return select_columns_frame
 
-def import_file_and_start_process(first_view_frame):
 
-    global df_dict
-    global file_imported
 
-    if(file_imported):
-        return
-    dataset_path = askopenfilename()
+def import_files_and_start_process(first_view_frame):
+
+    global all_dfs_dict
+
+    datasets_path = list(askopenfilenames())
 
     #If no file was selected, do nothing
-    if not dataset_path:
+    if not datasets_path or len(datasets_path)==0:
         return
 
-    import_file_message = display_message("Importing File...", first_view_frame)
+    import_file_message = display_message("Importing File(s)...", first_view_frame)
 
-    import_succesfull, import_content = app_backend.import_dataset(dataset_path)
-    if(import_succesfull):
-        display_message("Dataset read successfully", first_view_frame)
-        df_dict = import_content
+    imports_result = app_backend.import_datasets(datasets_path)
+    all_dfs_dict = []
 
-        #Change file_imported status so as to disable new imports
-        file_imported = True
+    #Check imports of different files result
+    for import_result in imports_result:
+        import_succesfull, import_content = import_result
 
-        #Start processing df
-        columns_names, labels_dict = app_backend.get_df_columns_names_and_labels(df_dict)
+        if not import_succesfull:
+            display_message("Error when importing dataset. Try again", first_view_frame)
+            display_message(import_content, first_view_frame)
+            return
+        else:
+            all_dfs_dict.append(import_content)
 
-        #Remove current frame and create new one
-        first_view_frame.pack_forget()
+    #Now lets move to the next step based on the analysis of the first file
+    #Start processing df
+    columns_names, labels_dict = app_backend.get_df_columns_names_and_labels(all_dfs_dict[0])
 
-        select_columns_frame = create_select_columns_frame(columns_names, labels_dict)
-
-    else:
-        display_message("Error when importing dataset. Try again", frame)
-        display_message(import_content, frame)
-
-    import_file_message.pack_forget()
+    #Remove current frame and create new one
+    first_view_frame.pack_forget()
+    select_columns_frame = create_select_columns_frame(columns_names, labels_dict)
 
 def window_setup(master):
 
@@ -246,8 +248,8 @@ def create_first_view_frame():
     start_application_label = ttk.Label(first_view_frame, text="Run application: ", wraplength=546, justify=tk.LEFT, font=("Calibri", 12, 'bold'), style='my.TLabel')
     start_application_label.pack(anchor='nw', padx=(30, 30), pady=(0, 10))
 
-    select_dataset_button = ttk.Button(first_view_frame, text="Select Dataset",
-    command=lambda : import_file_and_start_process(first_view_frame), style='my.TButton')
+    select_dataset_button = ttk.Button(first_view_frame, text="Select Dataset(s)",
+    command=lambda : import_files_and_start_process(first_view_frame), style='my.TButton')
     select_dataset_button.pack(anchor='nw', padx=(30, 30), pady=(0, 5))
 
     return first_view_frame

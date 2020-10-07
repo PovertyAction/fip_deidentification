@@ -1,13 +1,14 @@
 import pandas as pd
 import os
 from hashlib import sha256
+from datetime import datetime
 
 LOG_FILE = None
+OUTPUTS_PATH = None
 
 def create_log_file_path(dataset_path):
-    path_without_extension = dataset_path[0:dataset_path.rfind(".")]
     global LOG_FILE
-    LOG_FILE = path_without_extension+"_log.txt"
+    LOG_FILE = os.path.join(OUTPUTS_PATH, "log.txt")
 
 def log_and_print(message):
     file = open(LOG_FILE, "a")
@@ -17,8 +18,9 @@ def log_and_print(message):
 
 def open_hash_dictionary():
     #Read dictionary .csv file
-    if os.path.exists('hash_dictionary.csv'):
-        hash_dictionary_df = pd.read_csv('hash_dictionary.csv')
+    hash_dictionary_file = os.path.join(OUTPUTS_PATH,'hash_dictionary.csv')
+    if os.path.exists(hash_dictionary_file):
+        hash_dictionary_df = pd.read_csv(hash_dictionary_file)
         dict = pd.Series(hash_dictionary_df['hash'].values, index=hash_dictionary_df['value']).to_dict()
     else:
         print("No existing dict, creating new one")
@@ -28,7 +30,7 @@ def open_hash_dictionary():
 def column_has_numbers(df, col):
 
     #Clean column removing non-numbers
-    df[col] = df[col].str.extract('(\d+)', expand=False)
+    df[col] = df[col].astype(str).str.extract('(\d+)', expand=False)
 
     #Check if there are any nulls after removal of numbers
     if(any(pd.isnull(df[col]))):
@@ -43,7 +45,6 @@ def column_has_dates(df, col):
         if(any(pd.isnull(date_col))):
             return False
         else:#If transformation was succesfull, return true
-            print(date_col)
             return True
     #If there was an error transforming to date, return false
     except:
@@ -56,19 +57,16 @@ def generate_salt(value):
 def generate_hash_value(value):
     salt = generate_salt(value)
     hash_value = sha256((str(value)+salt).encode('utf-8')).hexdigest()
-    print(hash_value)
     return hash_value
 
-def hash_dataframe_and_create_prefix_column(df, columns_to_hash):
+def hash_dataframe_and_create_prefix_column(df, df_path, columns_to_hash, hash_dictionary):
 
-    #Keep record of hashing
-    hash_dictionary = open_hash_dictionary()
 
     #We are expecting to hash only numeric columns
     for col in columns_to_hash:
 
         #Clean column removing non-numbers
-        df[col] = df[col].str.extract('(\d+)', expand=False)
+        df[col] = df[col].astype(str).str.extract('(\d+)', expand=False)
 
         # Cut to last 9 digits of number
         # +254-yyy-xxxxxx, keep yyy-xxxxxx
@@ -93,10 +91,15 @@ def hash_dataframe_and_create_prefix_column(df, columns_to_hash):
 
     return df, hash_dictionary
 
-def export_hash_dict(dataset_path, hash_dict):
+def get_parent_folder_path(dataset_path):
+    return os.path.dirname(os.path.realpath(dataset_path))
 
-    folder_path = os.path.dirname(os.path.realpath(dataset_path))
-    hash_dict_file_path = os.path.join(folder_path,'hash_dictionary.csv')
+def get_file_name(dataset_path):
+    return dataset_path[dataset_path.rfind("/")+1:dataset_path.rfind(".")]
+
+def export_hash_dict(hash_dict):
+
+    hash_dict_file_path = os.path.join(OUTPUTS_PATH,'hash_dictionary.csv')
 
     #Delete if file exists to create a new one
     if os.path.exists(hash_dict_file_path):
@@ -127,66 +130,99 @@ def dob_formatting(df, columns_for_dob_formatting):
 
 def export_df(dataset, dataset_path):
     dataset_type = dataset_path.split('.')[1]
+    file_name = get_file_name(dataset_path)
+
+    new_file_path = os.path.join(OUTPUTS_PATH, file_name + '_deidentified.'+dataset_type)
 
     if(dataset_type == 'csv'):
-        new_file_path = dataset_path.split('.')[0] + '_deidentified.csv'
         dataset.to_csv(new_file_path, index=False)
 
     elif(dataset_type == 'xlsx'):
-        new_file_path = dataset_path.split('.')[0] + '_deidentified.xlsx'
         dataset.to_excel(new_file_path, index=False)
 
     elif(dataset_type == 'xls'):
-        new_file_path = dataset_path.split('.')[0] + '_deidentified.xls'
         dataset.to_excel(new_file_path, index=False)
-
     else:
         log_and_print("Data type not supported")
         new_file_path = None
 
     return new_file_path
 
+def create_deidentified_datasets(all_dfs_dict, columns_to_action):
+
+    #Keep record of hashing
+    hash_dictionary = open_hash_dictionary()
+
+    for df_dict in all_dfs_dict:
+        exported_file_path, hash_dictionary = create_deidentified_dataset(df_dict['dataset'], df_dict['dataset_path'], columns_to_action, hash_dictionary)
+
+    #Export new dictionary
+    export_hash_dict(hash_dictionary)
 
 
-def create_deidentified_dataset(df, df_path, columns_to_action):
+def create_deidentified_dataset(df, df_path, columns_to_action, hash_dictionary):
     ## a. Drops unneeded columns
     ## b. Hash columns so records can be matched across datasets, but holds on to number prefix to identify initial mobile carrier later
     ## c. Coverts date of birth to year of birth
 
     #Drop columns
     columns_to_drop = [column for column in columns_to_action if columns_to_action[column]=='Drop']
-    df.drop(columns=columns_to_drop, inplace=True)
-    log_and_print("Dropped columns: "+ " ".join(columns_to_drop))
+    if len(columns_to_drop)>0:
+        df.drop(columns=columns_to_drop, inplace=True)
+        log_and_print(f'Dropped columns: {" ".join(columns_to_drop)} in {df_path}')
 
     #Hash columns and keep prefixes
     columns_to_hash = [column for column in columns_to_action if columns_to_action[column]=='Hash']
     if(len(columns_to_hash)>0):
-
-        log_and_print("Will get prefixes and hash following columns: "+ " ".join(columns_to_hash))
-
-        df, hash_dictionary = hash_dataframe_and_create_prefix_column(df, columns_to_hash)
-        log_and_print("Map file for encoded values created.")
-
-        export_hash_dict(df_path, hash_dictionary)
+        df, hash_dictionary = hash_dataframe_and_create_prefix_column(df, df_path, columns_to_hash, hash_dictionary)
+        log_and_print(f'Hashed columns: {" ".join(columns_to_hash)} in {df_path}')
 
     #DOB formatting
     columns_for_dob_formatting = [column for column in columns_to_action if columns_to_action[column]=='DOB formatting']
     if(len(columns_for_dob_formatting)>0):
-        log_and_print("Will DOB format following columns: "+ " ".join(columns_for_dob_formatting))
+        log_and_print("DOB formating for columns: "+ " ".join(columns_for_dob_formatting))
         df = dob_formatting(df, columns_for_dob_formatting)
-        log_and_print("DOB formatting finished.")
 
     #Export new df
     exported_file_path = export_df(df, df_path)
 
-    return exported_file_path
+    return exported_file_path, hash_dictionary
 
 def get_df_columns_names_and_labels(df_dict):
     return df_dict['dataset'].columns, df_dict['label_dict']
 
-def import_dataset(dataset_path):
+def get_time_now_str():
+    now = datetime.now()
+    # dd/mm/YY H:M:S
+    dt_string = now.strftime("%m_%d_%Y_%H_%M_%S")
+    print("date and time =", dt_string)
+    return dt_string
 
-    create_log_file_path(dataset_path)
+def create_outputs_folder(dataset_path):
+
+    global OUTPUTS_PATH
+
+    parent_folder_path = get_parent_folder_path(dataset_path)
+
+    OUTPUTS_PATH = os.path.join(parent_folder_path, 'outputs_'+get_time_now_str())
+
+    #Check that directory does not exist
+    if os.path.isdir(OUTPUTS_PATH) is False:
+        os.mkdir(OUTPUTS_PATH)
+
+
+def import_datasets(datasets_path_list):
+
+    create_outputs_folder(datasets_path_list[0])
+    create_log_file_path(datasets_path_list[0])
+
+    imports_result = []
+    for dataset_path in datasets_path_list:
+        import_succesfull, import_content = import_dataset(dataset_path)
+        imports_result.append((import_succesfull, import_content))
+    return imports_result
+
+def import_dataset(dataset_path):
 
     dataset, label_dict, value_label_dict = False, False, False
     raise_error = False
@@ -226,28 +262,28 @@ def import_dataset(dataset_path):
         raise
 
     if (status_message):
-        log_and_print("There was an error")
+        log_and_print(f'There was an error reading {dataset_path}')
         log_and_print(status_message)
         return (False, status_message)
 
-    log_and_print('The dataset has been read successfully.')
+    log_and_print(f'The dataset {dataset_path} has been read successfully.')
     dataset_dict = {'dataset':dataset, 'dataset_path':dataset_path, 'label_dict':label_dict, 'value_label_dict':value_label_dict}
     return (True, dataset_dict)
 
 
-if __name__ == "__main__":
-
-    import_succesfull, import_content = import_dataset('fakedata.csv')
-
-    df_dict = import_content
-    columns_names, labels_dict = get_df_columns_names_and_labels(df_dict)
-
-    #Create fake options
-    columns_to_action = {}
-    for column in columns_names:
-        columns_to_action[column] = 'Keep'
-    columns_to_action['gender']='Hash'
-
-    columns_to_action['dob']='DOB formatting'
-
-    deidentified_df = create_deidentified_dataset(df_dict['dataset'],df_dict['dataset_path'], columns_to_action)
+# if __name__ == "__main__":
+#
+#     import_succesfull, import_content = import_dataset('fakedata.csv')
+#
+#     df_dict = import_content
+#     columns_names, labels_dict = get_df_columns_names_and_labels(df_dict)
+#
+#     #Create fake options
+#     columns_to_action = {}
+#     for column in columns_names:
+#         columns_to_action[column] = 'Keep'
+#     columns_to_action['gender']='Hash'
+#
+#     columns_to_action['dob']='DOB formatting'
+#
+#     deidentified_df = create_deidentified_dataset(df_dict['dataset'],df_dict['dataset_path'], columns_to_action)
