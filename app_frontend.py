@@ -114,9 +114,17 @@ def selected_actions_are_valid(columns_to_action):
                     return False
             #For DOB formatting, column must be a date
             elif action == 'DOB formatting':
-                if(not app_backend.column_has_dates(df_dict['dataset'], column)):
-                    messagebox.showinfo("Error", f"Column {column} in {df_dict['dataset_path']} has rows without dates.\nDOB formatting is only available for dates.")
+                column_has_dates_result = app_backend.column_has_dates(df_dict['dataset'], column)
+
+                if column_has_dates_result == 'SOME EMPTY VALUES':
+                    messagebox.showinfo("Warning", f"Column {column} in {df_dict['dataset_path']} has rows with empty values.\nThese observations will contain missing Year of Birth information.")
+                elif column_has_dates_result == 'ALL EMPTY VALUES':
+                    messagebox.showinfo("Error", f"Column {column} in {df_dict['dataset_path']} has all rows with empty values.\nChoose a different column for DOB formatting.")
                     return False
+                elif column_has_dates_result == 'ERROR':
+                    messagebox.showinfo("Error", f"Column {column} in {df_dict['dataset_path']} has rows without date formats.\nChoose a different column for DOB formatting.")
+                    return False
+
     return True
 
 

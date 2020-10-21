@@ -41,14 +41,24 @@ def column_has_numbers(df, col):
 def column_has_dates(df, col):
     try:
         date_col = pd.to_datetime(df[col])
-        #If any date is none, return false
-        if(any(pd.isnull(date_col))):
-            return False
+
+        #Check if all rows are not dates
+        if(all(pd.isnull(date_col))):
+            print('ALL EMPTY VALUES')
+            return 'ALL EMPTY VALUES'
+        #Check if any rows are not dates
+        elif(any(pd.isnull(date_col))):
+            print('SOME EMPTY VALUES')
+            return 'SOME EMPTY VALUES'
         else:#If transformation was succesfull, return true
-            return True
+            print('ALL DATE')
+            return 'ALL DATE'
+
     #If there was an error transforming to date, return false
-    except:
-        return False
+    except Exception as e:
+        print('ERROR')
+        print(e)
+        return 'ERROR'
 
 def generate_salt(value, password):
     #The salt comes from hashing the value and the user password together
@@ -120,10 +130,9 @@ def dob_formatting(df, columns_for_dob_formatting):
         #If column indeed had dates
         if(any(date_parsed_col)):
             #Replace dob columns by years only
-            year_col = date_parsed_col.dt.year.astype('int')
+            year_col = date_parsed_col.dt.year
             df[col] = year_col
-
-            # Aggregate all of those who were born in 1930 or earlier
+            # All whose yob is lowers than 1930, set as 1930
             df.loc[df[col] < 1930, col] = 1930
     return df
 
