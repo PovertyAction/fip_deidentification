@@ -8,7 +8,7 @@ import os
 
 import app_backend
 
-app_title = "FIP Deidentification-Hashing App - v0.2"
+app_title = "FIP Deidentification-Hashing App - v0.3"
 intro_text = "- Hashing is designed for columns containing numbers (ex: msisdn)\n- DOB formatting is designed for columns with dates\n- You can choose either one or multiple files for deidentification.\nIf you choose multiple, all files are expected to have the same format (columns)."
 
 #Set parameters
