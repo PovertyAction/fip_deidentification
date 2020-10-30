@@ -1,7 +1,5 @@
-# Caveats to consider when running .exe
+# Installing desktop app
 
-* The app is still being tested. This is not a final version.
-* To download, click on the .exe in this page and then click on the ‘download’ button
-* Windows will show warning when opening .exe. Please click on 'More info' and then 'Run anyway'.
-* After double clicking on the .exe, the application will take a bit to load (~15 sec.)
-* If app shows ‘Windows not responding’, it is probably not an error, but just program working in the back.
+1. Download windows installer vX.X.exe
+2. Execute installer. This will install the app as a desktop app as any other program in windows, creating necessary shortcuts to run the app.
+3. You can uninstall whenever you want from Control Panel
