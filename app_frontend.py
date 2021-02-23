@@ -24,6 +24,8 @@ all_dfs_dict = None
 password = None
 columns_to_dropdown_element = {}
 
+creating_deidentified_datasets = False
+
 def display_title(title, frame):
     label = ttk.Label(frame, text=title, wraplength=546, justify=tk.LEFT, font=("Calibri", 12, 'bold'), style='my.TLabel')
     label.pack(anchor='nw', padx=(30, 30), pady=(0, 5))
@@ -131,6 +133,12 @@ def selected_actions_are_valid(columns_to_action):
 
 def create_deidentified_datasets(select_columns_frame):
 
+    global creating_deidentified_datasets
+
+    #If we are already creating the deidenitified dataset, disable buttom
+    if creating_deidentified_datasets:
+        return
+
     #We create a new dictionary that maps columns to actions based on value of dropdown elements
     columns_to_action = {}
     for column, dropdown_elem in columns_to_dropdown_element.items():
@@ -141,7 +149,8 @@ def create_deidentified_datasets(select_columns_frame):
         return
 
     display_message("Creating deidentified dataset(s)...", select_columns_frame)
-
+    creating_deidentified_datasets = True
+    
     #Automatic scroll down
     canvas.yview_moveto( 1 )
     main_frame.update()
