@@ -168,10 +168,7 @@ def create_deidentified_datasets(select_columns_frame):
     canvas.yview_moveto( 1 )
     main_frame.update()
 
-    n_digits_in_phones = int(phone_n_length.get())
-    n_digits_prefix = int(n_prefix.get())
-
-    outputs_path = app_backend.create_deidentified_datasets(all_dfs_dict, columns_to_action, password, n_digits_in_phones, n_digits_prefix)
+    outputs_path = app_backend.create_deidentified_datasets(all_dfs_dict, columns_to_action, password, phone_n_length.get(), n_prefix.get())
 
     #Remove current frame
     select_columns_frame.pack_forget()

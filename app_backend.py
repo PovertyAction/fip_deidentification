@@ -97,11 +97,11 @@ def apply_phone_hash_and_create_prefix_column(df, df_path, columns_to_hash, hash
 
         # Cut to last n_digits_in_phone digits of number
         # +254-yyy-xxxxxx, keep yyy-xxxxxx for example
-        df[col] = df[col].str[-n_digits_in_phone:]
+        df[col] = df[col].str[-int(n_digits_in_phone):]
 
         #Create prefix column
-        if n_digits_prefix!='' and n_digits_prefix!=0:
-            df[col+'_prefix'] = df[col].str[:n_digits_prefix].astype(int)
+        if n_digits_prefix!='' and n_digits_prefix!='0':
+            df[col+'_prefix'] = df[col].str[:int(n_digits_prefix)].astype(int)
 
         #Change column type
         df[col] = df[col].astype(int)
