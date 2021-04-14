@@ -8,12 +8,13 @@ import os
 
 import app_backend
 
-app_title = "FIP Deidentification-Hashing App - v0.3"
-intro_text = "- Hashing is designed for columns containing numbers (ex: msisdn)\n- DOB formatting is designed for columns with dates\n- You can choose either one or multiple files for deidentification.\nIf you choose multiple, all files are expected to have the same format (columns)."
+version = "0.5"
+app_title = "IPA's dedentification app for [providers] - v"+version
+
 
 #Set parameters
-window_width = 700
-window_height = 700
+window_width = 800
+window_height = 800
 max_screen = False
 scrollbar = True
 
@@ -22,6 +23,10 @@ main_frame = None
 files_read_frame = None
 all_dfs_dict = None
 password = None
+
+phone_n_length = None
+n_prefix = None
+
 columns_to_dropdown_element = {}
 
 creating_deidentified_datasets = False
@@ -32,8 +37,12 @@ def display_title(title, frame):
     frame.update()
     return label
 
-def display_message(message, frame):
-    label = ttk.Label(frame, text=message, wraplength=546, justify=tk.LEFT, font=("Calibri Italic", 11), style='my.TLabel')
+def display_message(message, frame, italic=False):
+    font="Calibri"
+    if italic:
+        font+=" Italic"
+
+    label = ttk.Label(frame, text=message, wraplength=546, justify=tk.LEFT, font=(font, 11), style='my.TLabel')
     label.pack(anchor='nw', padx=(30, 30), pady=(0, 5))
     frame.update()
     return label
@@ -77,8 +86,7 @@ def display_columns(frame, columns, label_dict, default_dropdown_option="Keep"):
 
         dropdown = tk.StringVar(columns_frame)
 
-        option_menu = ttk.OptionMenu(columns_frame, dropdown, default_dropdown_option, "Drop", "Hash", "Keep", "DOB formatting",
-        style='my.TMenubutton')
+        option_menu = ttk.OptionMenu(columns_frame, dropdown, default_dropdown_option, "Phone hashing", "DOB hashing", "Simple hash", "Drop", "Keep", style='my.TMenubutton')
 
         option_menu.grid(row=idx, column = 1, sticky = 'w', pady=(0,2))
 
@@ -108,12 +116,17 @@ def selected_actions_are_valid(columns_to_action):
     for df_dict in all_dfs_dict:
         for column, action in columns_to_action.items():
             #Hash is only enabled for columns with numbers, check that
-            if action == 'Hash':
-                print(df_dict['dataset_path'])
+            #Also check that input for phone hash is a number bigger than 0
+            if action == 'Phone hashing':
                 if(not app_backend.column_has_numbers(df_dict['dataset'], column)):
                     print(df_dict.keys())
                     messagebox.showinfo("Error", f"Column {column} in {df_dict['dataset_path']} has rows without numbers.\nHashing is only available for numbers.")
                     return False
+
+                if not phone_n_length.get().isdigit():
+                    messagebox.showinfo("Error", "Please write down phone numbers length")
+                    return False
+
             #For DOB formatting, column must be a date
             elif action == 'DOB formatting':
                 column_has_dates_result = app_backend.column_has_dates(df_dict['dataset'], column)
@@ -150,12 +163,15 @@ def create_deidentified_datasets(select_columns_frame):
 
     display_message("Creating deidentified dataset(s)...", select_columns_frame)
     creating_deidentified_datasets = True
-    
+
     #Automatic scroll down
     canvas.yview_moveto( 1 )
     main_frame.update()
 
-    outputs_path = app_backend.create_deidentified_datasets(all_dfs_dict, columns_to_action, password)
+    n_digits_in_phones = int(phone_n_length.get())
+    n_digits_prefix = int(n_prefix.get())
+
+    outputs_path = app_backend.create_deidentified_datasets(all_dfs_dict, columns_to_action, password, n_digits_in_phones, n_digits_prefix)
 
     #Remove current frame
     select_columns_frame.pack_forget()
@@ -165,7 +181,7 @@ def create_deidentified_datasets(select_columns_frame):
 
 
 
-def create_select_columns_frame(first_view_frame):
+def create_select_columns_frame(instructions_frame):
 
     #We need to check that all selected dfs have same structure
     all_columns_same_names, error_message = app_backend.all_dfs_have_same_columns(all_dfs_dict)
@@ -174,7 +190,7 @@ def create_select_columns_frame(first_view_frame):
       return
 
     #Remove current frame
-    first_view_frame.pack_forget()
+    instructions_frame.pack_forget()
 
     #Get columns
     columns_names, labels_dict = app_backend.get_df_columns_names_and_labels(all_dfs_dict[0])
@@ -182,14 +198,17 @@ def create_select_columns_frame(first_view_frame):
     select_columns_frame = tk.Frame(master=main_frame, bg="white")
     select_columns_frame.pack(anchor='nw', padx=(0, 0), pady=(0, 0))
 
-    display_title('Columns:', select_columns_frame)
-
     if(len(columns_names)==0):
         display_message('No columns found.', select_columns_frame)
     else:
-        display_message('For each column, select an action', select_columns_frame)
-        display_columns(select_columns_frame, columns_names, labels_dict)
+        display_message('For each column, select an action:', select_columns_frame, italic=True)
 
+        actions_description_text ='- Keep: keep column\n- Drop: drop column\n- Simple hash: apply sha256 hash to column (no pre processing of data before hashing)\n- DOB hashing: keep only year from DOB column\n- Phone hashing: strip non-numeric characters from phone before hashing and keep prefix (specify details below)'
+        display_message(actions_description_text, select_columns_frame)
+
+        create_phone_hashing_settings_frame(select_columns_frame)
+
+        display_columns(select_columns_frame, columns_names, labels_dict)
 
         create_deidentified_df_button = ttk.Button(select_columns_frame, text='Create deidentified dataset(s)', command=lambda: create_deidentified_datasets(select_columns_frame), style='my.TButton')
 
@@ -198,7 +217,7 @@ def create_select_columns_frame(first_view_frame):
 
     return select_columns_frame
 
-def update_files_read_frame(first_view_frame):
+def update_files_read_frame(instructions_frame):
     global files_read_frame
 
     #Clean previous files read
@@ -207,20 +226,20 @@ def update_files_read_frame(first_view_frame):
 
     #Display files read
     if(len(all_dfs_dict))>0:
-        files_read_frame = tk.Frame(master=first_view_frame, bg="white")
+        files_read_frame = tk.Frame(master=instructions_frame, bg="white")
         files_read_frame.pack(anchor='nw', padx=(0, 0), pady=(0, 0))
 
-        display_message("Success reading following file(s):", files_read_frame)
+        display_message("Success reading following file(s):", files_read_frame, italic=True)
         for df_dict in all_dfs_dict:
             display_message(df_dict['dataset_path'], files_read_frame)
 
         #Add buttom to start deidentification
-        deidentify_button = ttk.Button(files_read_frame, text="Start deidentification",
-        command=lambda : create_select_columns_frame(first_view_frame), style='my.TButton')
+        deidentify_button = ttk.Button(instructions_frame, text="Start deidentification",
+        command=lambda : create_select_columns_frame(instructions_frame), style='my.TButton')
         deidentify_button.pack(anchor='nw', padx=(30, 30), pady=(0, 5))
 
 
-def import_files(first_view_frame):
+def import_files(instructions_frame):
 
     global all_dfs_dict
 
@@ -230,7 +249,7 @@ def import_files(first_view_frame):
     if not datasets_path or len(datasets_path)==0:
         return
 
-    import_file_message = display_message("Importing File(s)...", first_view_frame)
+    import_file_message = display_message("Importing File(s)...", instructions_frame)
 
     imports_result = app_backend.import_datasets(datasets_path)
     import_file_message.pack_forget()
@@ -246,7 +265,7 @@ def import_files(first_view_frame):
         else:
             all_dfs_dict.append(import_content)
 
-    update_files_read_frame(first_view_frame)
+    update_files_read_frame(instructions_frame)
 
 
 def window_setup(master):
@@ -286,24 +305,54 @@ def check_password(password_inserted, first_view_frame, password_frame):
     password_is_correct = app_backend.check_password(password_inserted)
 
     if password_is_correct:
-        messagebox.showinfo("Success", f"Welcome, you are logged in")
         password = password_inserted
 
-        #Remove password frame
-        password_frame.pack_forget()
+        #Remove first_view_frame
+        first_view_frame.pack_forget()
 
-        #Labels and buttoms to run app
-        start_application_label = ttk.Label(first_view_frame, text="Run application: ", wraplength=546, justify=tk.LEFT, font=("Calibri", 12, 'bold'), style='my.TLabel')
-        start_application_label.pack(anchor='nw', padx=(30, 30), pady=(0, 10))
-
-        select_dataset_button = ttk.Button(first_view_frame, text="Select Dataset(s)",
-        command=lambda : import_files(first_view_frame), style='my.TButton')
-        select_dataset_button.pack(anchor='nw', padx=(30, 30), pady=(0, 5))
+        #Create next frame
+        create_instructions_frame()
 
     else:
         messagebox.showinfo("Error", f"Wrong password, please try again")
         return False
 
+
+def create_phone_hashing_settings_frame(select_columns_frame):
+
+    global phone_n_length
+    global n_prefix
+
+    display_message('Phone hashing settings', select_columns_frame, italic=True)
+
+    phone_hashing_settings_frame = tk.Frame(master=select_columns_frame, bg="white")
+    # phone_hashing_settings_frame.pack(anchor='nw', padx=(30, 30), pady=(0, 5))
+    phone_hashing_settings_frame.pack(anchor='nw', padx=(0, 0), pady=(0, 0))
+
+    ttk.Label(phone_hashing_settings_frame, text="How long are expected phone numbers: ", wraplength=546, justify=tk.LEFT, font=("Calibri", 11), style='my.TLabel').pack(anchor='nw', padx=(30, 30), pady=(0, 5))
+
+    def validate_phone_n_length_is_int(*args):
+        value = phone_n_length.get()
+        if  value.isdigit() is False: phone_n_length.set('')
+
+    phone_n_length = tk.StringVar()
+    phone_n_length.trace('w', validate_phone_n_length_is_int)
+
+    tk.Entry(phone_hashing_settings_frame, width=5, textvariable=phone_n_length).pack(anchor='nw', padx=(30, 30), pady=(0, 5))
+
+    ttk.Label(phone_hashing_settings_frame, text="How many prefix numbers do you want to preserve? (leave empty for none): ", wraplength=546, justify=tk.LEFT, font=("Calibri", 11), style='my.TLabel').pack(anchor='nw', padx=(30, 30), pady=(0, 5))
+
+    def validate_n_prefix_empty_or_single_char_int(*args):
+        value = n_prefix.get()
+        if len(value) > 1: n_prefix.set(value[0])
+        if value!='' and value.isdigit() is False: n_prefix.set('')
+
+    n_prefix = tk.StringVar()
+    n_prefix.trace('w', validate_n_prefix_empty_or_single_char_int)
+
+    tk.Entry(phone_hashing_settings_frame, width=2, textvariable=n_prefix).pack(anchor='nw', padx=(30, 30), pady=(0, 5))
+
+    return phone_hashing_settings_frame
 
 def create_password_frame(first_view_frame):
 
@@ -322,12 +371,35 @@ def create_password_frame(first_view_frame):
 
     return password_frame
 
+def create_instructions_frame():
+
+    instructions_frame = tk.Frame(master=main_frame, bg="white")
+    instructions_frame.pack(anchor='nw', padx=(0, 0), pady=(0, 0))
+
+    #Add instructions text
+    instructions_text = "INSTRUCTIONS\nThis app is designed for you to create deidentified copies of your datasets.\nFor each column of your dataset, you will be able to choose what to do, based on the following list of options:\n- Keep columns as they are\n- Drop columns\n- Hash columns\n\nThere's a variety of options for hashing:\n- Simple hashing: will apply SHA256 [ADD LINK] hashing to columns content.\n- Date of birth (DOB) hashing: will preserve only year from the DOB of a column.\n- Phone number hashing: will hash phone numbers only after stripping non numerics characters from numbers. This option is the desired to guarantee that when a phone number is written in slightly different formats, it will always hash to the same value. Ex: '(123) 456 789' will hash to the same value as '123456789'. The method will also preserve phone numbers prefix is desired.\n\nNUMBER OF FILES TO PROCESS\nYou can choose either one or multiple files for deidentification.\nIf you choose multiple, all files are expected to have the same format (columns)."
+
+    instructions_text_label = ttk.Label(instructions_frame, text=instructions_text, wraplength=746, justify=tk.LEFT, font=("Calibri", 11), style='my.TLabel')
+    instructions_text_label.pack(anchor='nw', padx=(30, 30), pady=(0, 12))
+
+
+    #Labels and buttoms to run app
+    start_application_label = ttk.Label(instructions_frame, text="Run application: ", wraplength=546, justify=tk.LEFT, font=("Calibri", 12, 'bold'), style='my.TLabel')
+    start_application_label.pack(anchor='nw', padx=(30, 30), pady=(0, 10))
+
+    select_dataset_button = ttk.Button(instructions_frame, text="Select Dataset(s)",
+    command=lambda : import_files(instructions_frame), style='my.TButton')
+    select_dataset_button.pack(anchor='nw', padx=(30, 30), pady=(0, 5))
+
+
 def create_first_view_frame():
 
     first_view_frame = tk.Frame(master=main_frame, bg="white")
     first_view_frame.pack(anchor='nw', padx=(0, 0), pady=(0, 0))
 
     #Add intro text
+    intro_text = "Welcome to IPA's dedentification app for [providers].\n\nFirst of all, please provide the password to use this app"
+
     intro_text_label = ttk.Label(first_view_frame, text=intro_text, wraplength=746, justify=tk.LEFT, font=("Calibri", 11), style='my.TLabel')
     intro_text_label.pack(anchor='nw', padx=(30, 30), pady=(0, 12))
 

@@ -69,7 +69,25 @@ def generate_hash_value(value, password):
     hash_value = sha256((str(value)+salt).encode('utf-8')).hexdigest()
     return hash_value
 
-def hash_dataframe_and_create_prefix_column(df, df_path, columns_to_hash, hash_dictionary, password):
+def apply_simple_hash(df, df_path, columns_to_hash, hash_dictionary, password):
+
+    for col in columns_to_hash:
+
+        #Get all unique values and add them and their hash to hash_dict if they dont already exist
+        for unique_val in df[col].unique():
+            if unique_val not in hash_dictionary:
+                hash_dictionary[unique_val] = generate_hash_value(unique_val, password)
+
+        # Replace values for their hashes in dataframe
+        # Loop over available values in the dictionary
+        for k, v in hash_dictionary.items():
+            df[col].replace(to_replace=k, value=v, inplace=True)
+
+    return df, hash_dictionary
+
+def apply_phone_hash_and_create_prefix_column(df, df_path, columns_to_hash, hash_dictionary, password, n_digits_in_phone, n_digits_prefix):
+
+    print(f'n_digits_in_phone, n_digits_prefix {(n_digits_in_phone, n_digits_prefix)}')
 
     #We are expecting to hash only numeric columns
     for col in columns_to_hash:
@@ -77,13 +95,13 @@ def hash_dataframe_and_create_prefix_column(df, df_path, columns_to_hash, hash_d
         #Clean column removing non-numbers
         df[col] = df[col].astype(str).str.extract('(\d+)', expand=False)
 
-        # Cut to last 9 digits of number
-        # +254-yyy-xxxxxx, keep yyy-xxxxxx
-        df[col] = df[col].str[-9:]
+        # Cut to last n_digits_in_phone digits of number
+        # +254-yyy-xxxxxx, keep yyy-xxxxxx for example
+        df[col] = df[col].str[-n_digits_in_phone:]
 
         #Create prefix column
-        # +254-yyy-xxxxxx, yyy is carrier code prefix
-        df[col+'_prefix'] = df[col].str[-9:-7].astype(int)
+        if n_digits_prefix!='' and n_digits_prefix!=0:
+            df[col+'_prefix'] = df[col].str[:n_digits_prefix].astype(int)
 
         #Change column type
         df[col] = df[col].astype(int)
@@ -122,7 +140,7 @@ def export_hash_dict(hash_dict):
 
     hash_df.to_csv(hash_dict_file_path, index=False)
 
-def dob_formatting(df, columns_for_dob_formatting):
+def apply_dob_formatting(df, columns_for_dob_formatting):
 
     for col in columns_for_dob_formatting:
         date_parsed_col = pd.to_datetime(df[col])
@@ -179,13 +197,13 @@ def check_password(password):
 
 
 
-def create_deidentified_datasets(all_dfs_dict, columns_to_action, password):
+def create_deidentified_datasets(all_dfs_dict, columns_to_action, password, n_digits_in_phones, n_digits_prefix):
 
     #Keep record of hashing
     hash_dictionary = open_hash_dictionary()
 
     for df_dict in all_dfs_dict:
-        exported_file_path, hash_dictionary = create_deidentified_dataset(df_dict['dataset'], df_dict['dataset_path'], columns_to_action, hash_dictionary, password)
+        exported_file_path, hash_dictionary = create_deidentified_dataset(df_dict['dataset'], df_dict['dataset_path'], columns_to_action, hash_dictionary, password, n_digits_in_phones, n_digits_prefix)
 
     #Export new dictionary
     export_hash_dict(hash_dictionary)
@@ -193,7 +211,7 @@ def create_deidentified_datasets(all_dfs_dict, columns_to_action, password):
     return OUTPUTS_PATH
 
 
-def create_deidentified_dataset(df, df_path, columns_to_action, hash_dictionary, password):
+def create_deidentified_dataset(df, df_path, columns_to_action, hash_dictionary, password, n_digits_in_phones, n_digits_prefix):
     ## a. Drops unneeded columns
     ## b. Hash columns so records can be matched across datasets, but holds on to number prefix to identify initial mobile carrier later
     ## c. Coverts date of birth to year of birth
@@ -202,19 +220,24 @@ def create_deidentified_dataset(df, df_path, columns_to_action, hash_dictionary,
     columns_to_drop = [column for column in columns_to_action if columns_to_action[column]=='Drop']
     if len(columns_to_drop)>0:
         df.drop(columns=columns_to_drop, inplace=True)
-        log_and_print(f'Dropped columns: {" ".join(columns_to_drop)} in {df_path}')
+        log_and_print(f'Dropped columns: {" ".join(columns_to_drop)}')
 
     #Hash columns and keep prefixes
-    columns_to_hash = [column for column in columns_to_action if columns_to_action[column]=='Hash']
-    if(len(columns_to_hash)>0):
-        df, hash_dictionary = hash_dataframe_and_create_prefix_column(df, df_path, columns_to_hash, hash_dictionary, password)
-        log_and_print(f'Hashed columns: {" ".join(columns_to_hash)} in {df_path}')
+    columns_for_simple_hash = [column for column in columns_to_action if columns_to_action[column]=='Simple hash']
+    if(len(columns_for_simple_hash)>0):
+        df, hash_dictionary = apply_simple_hash(df, df_path, columns_for_simple_hash, hash_dictionary, password)
+        log_and_print(f'Columns hashed with simple hash: {" ".join(columns_for_simple_hash)}')
+
+    columns_for_phone_hash = [column for column in columns_to_action if columns_to_action[column]=='Phone hashing']
+    if(len(columns_for_phone_hash)>0):
+        df, hash_dictionary = apply_phone_hash_and_create_prefix_column(df, df_path, columns_for_phone_hash, hash_dictionary, password, n_digits_in_phones, n_digits_prefix)
+        log_and_print(f'Columns hashed with phone hash: {" ".join(columns_for_phone_hash)}')
 
     #DOB formatting
-    columns_for_dob_formatting = [column for column in columns_to_action if columns_to_action[column]=='DOB formatting']
+    columns_for_dob_formatting = [column for column in columns_to_action if columns_to_action[column]=='DOB hashing']
     if(len(columns_for_dob_formatting)>0):
-        log_and_print("DOB formating for columns: "+ " ".join(columns_for_dob_formatting))
-        df = dob_formatting(df, columns_for_dob_formatting)
+        log_and_print("Columns hashed with simple hash: "+ " ".join(columns_for_dob_formatting))
+        df = apply_dob_formatting(df, columns_for_dob_formatting)
 
     #Export new df
     exported_file_path = export_df(df, df_path)
