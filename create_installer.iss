@@ -6,7 +6,7 @@
 ; (To generate a new GUID, click Tools | Generate GUID inside the IDE.)
 AppId={{BED80849-A6B6-49AB-A0CF-494C595B834A}
 AppName=FIP Hashing & Deidentification
-AppVersion=0.3
+AppVersion=0.5
 ;AppVerName=FIP Hashing & Deidentification 0.3
 AppPublisher=IPA
 AppPublisherURL=https://www.poverty-action.org/
@@ -16,7 +16,7 @@ DefaultDirName={autopf}\FIP Hashing & Deidentification
 DisableProgramGroupPage=yes
 ; Uncomment the following line to run in non administrative install mode (install for current user only.)
 ;PrivilegesRequired=lowest
-OutputDir=C:\Users\felip\Desktop
+OutputDir=C:\Users\felip\fip_deidentification\dist
 OutputBaseFilename=FIP Hashing & Deidentification installer
 SetupIconFile=C:\Users\felip\fip_deidentification\dist\app_frontend\app_icon.ico
 Compression=lzma

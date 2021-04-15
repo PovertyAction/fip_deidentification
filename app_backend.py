@@ -217,6 +217,9 @@ def create_deidentified_dataset(df, df_path, columns_to_action, hash_dictionary,
     ## c. Coverts date of birth to year of birth
 
     #Drop columns
+
+    print(f'Starting deidentification of {df_path} at {get_time_now_str()}')
+
     columns_to_drop = [column for column in columns_to_action if columns_to_action[column]=='Drop']
     if len(columns_to_drop)>0:
         df.drop(columns=columns_to_drop, inplace=True)
@@ -241,6 +244,8 @@ def create_deidentified_dataset(df, df_path, columns_to_action, hash_dictionary,
 
     #Export new df
     exported_file_path = export_df(df, df_path)
+
+    print(f'Finished deidentification of {df_path} at {get_time_now_str()}')
 
     return exported_file_path, hash_dictionary
 
