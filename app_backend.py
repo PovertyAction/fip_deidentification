@@ -208,14 +208,17 @@ def create_deidentified_datasets(all_dfs_dict, columns_to_action, password, n_di
     #Keep record of hashing
     # hash_dictionary = open_hash_dictionary()
 
-    for df_dict in all_dfs_dict:
-        exported_file_path = create_deidentified_dataset(df_dict['dataset'], df_dict['dataset_path'], columns_to_action, password, n_digits_in_phones, n_digits_prefix)
+    try:
 
-    #Export new dictionary
-    # export_hash_dict(hash_dictionary)
+        for df_dict in all_dfs_dict:
+            exported_file_path = create_deidentified_dataset(df_dict['dataset'], df_dict['dataset_path'], columns_to_action, password, n_digits_in_phones, n_digits_prefix)
 
-    return OUTPUTS_PATH
+        return True, OUTPUTS_PATH
 
+    except Exception as e:
+        print('An exception occurred')
+        print(e)
+        return False, e
 
 def create_deidentified_dataset(df, df_path, columns_to_action, password, n_digits_in_phones, n_digits_prefix):
 
