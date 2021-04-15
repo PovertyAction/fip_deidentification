@@ -16,16 +16,17 @@ def log_and_print(message):
     file.close()
     print(message)
 
-def open_hash_dictionary():
-    #Read dictionary .csv file
-    hash_dictionary_file = os.path.join(OUTPUTS_PATH,'hash_dictionary.csv')
-    if os.path.exists(hash_dictionary_file):
-        hash_dictionary_df = pd.read_csv(hash_dictionary_file)
-        dict = pd.Series(hash_dictionary_df['hash'].values, index=hash_dictionary_df['value']).to_dict()
-    else:
-        print("No existing dict, creating new one")
-        dict={}
-    return dict
+# DEPRECATED
+# def open_hash_dictionary():
+#     #Read dictionary .csv file
+#     hash_dictionary_file = os.path.join(OUTPUTS_PATH,'hash_dictionary.csv')
+#     if os.path.exists(hash_dictionary_file):
+#         hash_dictionary_df = pd.read_csv(hash_dictionary_file)
+#         dict = pd.Series(hash_dictionary_df['hash'].values, index=hash_dictionary_df['value']).to_dict()
+#     else:
+#         print("No existing dict, creating new one")
+#         dict={}
+#     return dict
 
 def column_has_numbers(df, col):
 
@@ -69,11 +70,14 @@ def generate_hash_value(value, password):
     hash_value = sha256((str(value)+salt).encode('utf-8')).hexdigest()
     return hash_value
 
-def apply_simple_hash(df, df_path, columns_to_hash, hash_dictionary, password):
+def apply_simple_hash(df, df_path, columns_to_hash, password):
 
+    #A different approach would be to traverse the columns and replace each value by their hash. Here we are generating all hashes first and then replacing, betting thats faster cause we compute hashes once per unique value
+
+    hash_dictionary = {}
     for col in columns_to_hash:
 
-        #Get all unique values and add them and their hash to hash_dict if they dont already exist
+        #Get all unique values, compute their hashes and save them in a dict
         for unique_val in df[col].unique():
             if unique_val not in hash_dictionary:
                 hash_dictionary[unique_val] = generate_hash_value(unique_val, password)
@@ -83,13 +87,14 @@ def apply_simple_hash(df, df_path, columns_to_hash, hash_dictionary, password):
         for k, v in hash_dictionary.items():
             df[col].replace(to_replace=k, value=v, inplace=True)
 
-    return df, hash_dictionary
+    return df
 
-def apply_phone_hash_and_create_prefix_column(df, df_path, columns_to_hash, hash_dictionary, password, n_digits_in_phone, n_digits_prefix):
+def apply_phone_hash_and_create_prefix_column(df, df_path, columns_to_hash, password, n_digits_in_phone, n_digits_prefix):
 
     print(f'n_digits_in_phone, n_digits_prefix {(n_digits_in_phone, n_digits_prefix)}')
 
-    #We are expecting to hash only numeric columns
+    hash_dictionary = {}
+
     for col in columns_to_hash:
 
         #Clean column removing non-numbers
@@ -116,7 +121,7 @@ def apply_phone_hash_and_create_prefix_column(df, df_path, columns_to_hash, hash
         for k, v in hash_dictionary.items():
             df[col].replace(to_replace=k, value=v, inplace=True)
 
-    return df, hash_dictionary
+    return df
 
 def get_parent_folder_path(dataset_path):
     return os.path.dirname(os.path.realpath(dataset_path))
@@ -124,21 +129,22 @@ def get_parent_folder_path(dataset_path):
 def get_file_name(dataset_path):
     return dataset_path[dataset_path.rfind("/")+1:dataset_path.rfind(".")]
 
-def export_hash_dict(hash_dict):
-
-    hash_dict_file_path = os.path.join(OUTPUTS_PATH,'hash_dictionary.csv')
-
-    #Delete if file exists to create a new one
-    if os.path.exists(hash_dict_file_path):
-        os.remove(hash_dict_file_path)
-
-    hash_df = pd.DataFrame(columns=['value','hash'])
-
-    for var, hash in hash_dict.items():
-        hash_df.loc[-1] = [var, hash]
-        hash_df.index = hash_df.index + 1
-
-    hash_df.to_csv(hash_dict_file_path, index=False)
+# DEPRECTATED
+# def export_hash_dict(hash_dict):
+#
+#     hash_dict_file_path = os.path.join(OUTPUTS_PATH,'hash_dictionary.csv')
+#
+#     #Delete if file exists to create a new one
+#     if os.path.exists(hash_dict_file_path):
+#         os.remove(hash_dict_file_path)
+#
+#     hash_df = pd.DataFrame(columns=['value','hash'])
+#
+#     for var, hash in hash_dict.items():
+#         hash_df.loc[-1] = [var, hash]
+#         hash_df.index = hash_df.index + 1
+#
+#     hash_df.to_csv(hash_dict_file_path, index=False)
 
 def apply_dob_formatting(df, columns_for_dob_formatting):
 
@@ -200,40 +206,37 @@ def check_password(password):
 def create_deidentified_datasets(all_dfs_dict, columns_to_action, password, n_digits_in_phones, n_digits_prefix):
 
     #Keep record of hashing
-    hash_dictionary = open_hash_dictionary()
+    # hash_dictionary = open_hash_dictionary()
 
     for df_dict in all_dfs_dict:
-        exported_file_path, hash_dictionary = create_deidentified_dataset(df_dict['dataset'], df_dict['dataset_path'], columns_to_action, hash_dictionary, password, n_digits_in_phones, n_digits_prefix)
+        exported_file_path = create_deidentified_dataset(df_dict['dataset'], df_dict['dataset_path'], columns_to_action, password, n_digits_in_phones, n_digits_prefix)
 
     #Export new dictionary
-    export_hash_dict(hash_dictionary)
+    # export_hash_dict(hash_dictionary)
 
     return OUTPUTS_PATH
 
 
-def create_deidentified_dataset(df, df_path, columns_to_action, hash_dictionary, password, n_digits_in_phones, n_digits_prefix):
-    ## a. Drops unneeded columns
-    ## b. Hash columns so records can be matched across datasets, but holds on to number prefix to identify initial mobile carrier later
-    ## c. Coverts date of birth to year of birth
-
-    #Drop columns
+def create_deidentified_dataset(df, df_path, columns_to_action, password, n_digits_in_phones, n_digits_prefix):
 
     print(f'Starting deidentification of {df_path} at {get_time_now_str()}')
 
+    #Drop selected columns
     columns_to_drop = [column for column in columns_to_action if columns_to_action[column]=='Drop']
     if len(columns_to_drop)>0:
         df.drop(columns=columns_to_drop, inplace=True)
         log_and_print(f'Dropped columns: {" ".join(columns_to_drop)}')
 
-    #Hash columns and keep prefixes
+    #Simple hash columns
     columns_for_simple_hash = [column for column in columns_to_action if columns_to_action[column]=='Simple hash']
     if(len(columns_for_simple_hash)>0):
-        df, hash_dictionary = apply_simple_hash(df, df_path, columns_for_simple_hash, hash_dictionary, password)
+        df = apply_simple_hash(df, df_path, columns_for_simple_hash, password)
         log_and_print(f'Columns hashed with simple hash: {" ".join(columns_for_simple_hash)}')
 
+    #Phone hashing
     columns_for_phone_hash = [column for column in columns_to_action if columns_to_action[column]=='Phone hashing']
     if(len(columns_for_phone_hash)>0):
-        df, hash_dictionary = apply_phone_hash_and_create_prefix_column(df, df_path, columns_for_phone_hash, hash_dictionary, password, n_digits_in_phones, n_digits_prefix)
+        df = apply_phone_hash_and_create_prefix_column(df, df_path, columns_for_phone_hash, password, n_digits_in_phones, n_digits_prefix)
         log_and_print(f'Columns hashed with phone hash: {" ".join(columns_for_phone_hash)}')
 
     #DOB formatting
@@ -247,7 +250,7 @@ def create_deidentified_dataset(df, df_path, columns_to_action, hash_dictionary,
 
     print(f'Finished deidentification of {df_path} at {get_time_now_str()}')
 
-    return exported_file_path, hash_dictionary
+    return exported_file_path
 
 def get_df_columns_names_and_labels(df_dict):
     return df_dict['dataset'].columns, df_dict['label_dict']
