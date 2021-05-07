@@ -203,57 +203,46 @@ def check_password(password):
 
 
 
-def create_deidentified_datasets(all_dfs_dict, columns_to_action, password, n_digits_in_phones, n_digits_prefix):
-
-    #Keep record of hashing
-    # hash_dictionary = open_hash_dictionary()
-
-    try:
-
-        for df_dict in all_dfs_dict:
-            exported_file_path = create_deidentified_dataset(df_dict['dataset'], df_dict['dataset_path'], columns_to_action, password, n_digits_in_phones, n_digits_prefix)
-
-        return True, OUTPUTS_PATH
-
-    except Exception as e:
-        print('An exception occurred')
-        print(e)
-        return False, e
-
 def create_deidentified_dataset(df, df_path, columns_to_action, password, n_digits_in_phones, n_digits_prefix):
 
     print(f'Starting deidentification of {df_path} at {get_time_now_str()}')
 
-    #Drop selected columns
-    columns_to_drop = [column for column in columns_to_action if columns_to_action[column]=='Drop']
-    if len(columns_to_drop)>0:
-        df.drop(columns=columns_to_drop, inplace=True)
-        log_and_print(f'Dropped columns: {" ".join(columns_to_drop)}')
+    try:
+        #Drop selected columns
+        columns_to_drop = [column for column in columns_to_action if columns_to_action[column]=='Drop']
+        if len(columns_to_drop)>0:
+            df.drop(columns=columns_to_drop, inplace=True)
+            log_and_print(f'Dropped columns: {" ".join(columns_to_drop)}')
 
-    #Simple hash columns
-    columns_for_simple_hash = [column for column in columns_to_action if columns_to_action[column]=='Simple hash']
-    if(len(columns_for_simple_hash)>0):
-        df = apply_simple_hash(df, df_path, columns_for_simple_hash, password)
-        log_and_print(f'Columns hashed with simple hash: {" ".join(columns_for_simple_hash)}')
+        #Simple hash columns
+        columns_for_simple_hash = [column for column in columns_to_action if columns_to_action[column]=='Simple hash']
+        if(len(columns_for_simple_hash)>0):
+            df = apply_simple_hash(df, df_path, columns_for_simple_hash, password)
+            log_and_print(f'Columns hashed with simple hash: {" ".join(columns_for_simple_hash)}')
 
-    #Phone hashing
-    columns_for_phone_hash = [column for column in columns_to_action if columns_to_action[column]=='Phone hashing']
-    if(len(columns_for_phone_hash)>0):
-        df = apply_phone_hash_and_create_prefix_column(df, df_path, columns_for_phone_hash, password, n_digits_in_phones, n_digits_prefix)
-        log_and_print(f'Columns hashed with phone hash: {" ".join(columns_for_phone_hash)}')
+        #Phone hashing
+        columns_for_phone_hash = [column for column in columns_to_action if columns_to_action[column]=='Phone hashing']
+        if(len(columns_for_phone_hash)>0):
+            df = apply_phone_hash_and_create_prefix_column(df, df_path, columns_for_phone_hash, password, n_digits_in_phones, n_digits_prefix)
+            log_and_print(f'Columns hashed with phone hash: {" ".join(columns_for_phone_hash)}')
 
-    #DOB formatting
-    columns_for_dob_formatting = [column for column in columns_to_action if columns_to_action[column]=='DOB hashing']
-    if(len(columns_for_dob_formatting)>0):
-        log_and_print("Columns hashed with simple hash: "+ " ".join(columns_for_dob_formatting))
-        df = apply_dob_formatting(df, columns_for_dob_formatting)
+        #DOB formatting
+        columns_for_dob_formatting = [column for column in columns_to_action if columns_to_action[column]=='DOB hashing']
+        if(len(columns_for_dob_formatting)>0):
+            log_and_print("Columns hashed with simple hash: "+ " ".join(columns_for_dob_formatting))
+            df = apply_dob_formatting(df, columns_for_dob_formatting)
 
-    #Export new df
-    exported_file_path = export_df(df, df_path)
+        #Export new df
+        exported_file_path = export_df(df, df_path)
 
-    print(f'Finished deidentification of {df_path} at {get_time_now_str()}')
+        print(f'Finished deidentification of {df_path} at {get_time_now_str()}')
 
-    return exported_file_path
+        return True, exported_file_path
+
+    except Exception as e:
+        print(f'An exception occurred when processing {df_path}')
+        print(e)
+        return False, e
 
 def get_df_columns_names_and_labels(df_dict):
     return df_dict['dataset'].columns, df_dict['label_dict']
