@@ -7,21 +7,7 @@ App to deidentify financial data from FIP partners.
 
 # Running locally
 
-First, create a file called `password.py` in this directory, and fill it with the following code:
-
-```
-def get_password_hash():
-    return 'sha256_of_the_password'
-```
-
-To compute the value of 'sha256_of_the_password' you can run the following piece of code
-
-```
-from hashlib import sha256
-print(sha256((str(password)).encode('utf-8')).hexdigest())
-```
-
-Once password.py file is ready, launch the app running
+Launch the app running
 
 `python app_frontend.py`
 
