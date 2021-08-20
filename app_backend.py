@@ -195,7 +195,7 @@ def all_dfs_have_same_columns(all_dfs_dict):
 def check_password(password):
     #Hash the password and compare it with save true password hash
     pass_hash = sha256((str(password)).encode('utf-8')).hexdigest()
-    from password import get_password_hash
+    from hash_password import get_password_hash
     if pass_hash == get_password_hash():
         return True
     else:
